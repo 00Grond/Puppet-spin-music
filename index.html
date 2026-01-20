@@ -3,90 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spin to Play Music (X-Axis) #4</title>
+  <title>Spin to Play Music</title>
+  <style>
+    body {
+      font-family: system-ui, monospace;
+      background: #111;
+      color: #0f0;
+      padding: 20px;
+    }
+    button {
+      font-size: 18px;
+      padding: 12px 20px;
+      margin-bottom: 15px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Spin the Box Forward/Backward to Play Music</h1>
-  <audio id="music" src="Puppet.mp3"></audio>
 
-  <script>
-    const music = document.getElementById('music');
-    let isPlaying = false;
-    let spinStartTime = null;
-    let lastSpinTime = Date.now();
+<h1>Spin the Box to Play Music</h1>
+<button id="startBtn">Enable Motion</button>
 
-    const SPIN_THRESHOLD = 90;      // degrees per second around X-axis
-    const SPIN_DURATION = 500;      // ms of continuous spin needed
-    const STOP_DELAY = 1500;        // ms after no spin before stopping music
+<audio id="music" src="puppet.mp3" preload="auto"></audio>
 
-    function startAudio() {
-      if (!isPlaying) {
-        music.loop = true;
-        music.play();
-        isPlaying = true;
-      }
+<div id="status">Waiting…</div>
+
+<script>
+const music = document.getElementById("music");
+const statusEl = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+
+let isPlaying = false;
+let spinStartTime = null;
+let lastSpinTime = 0;
+
+const SPIN_THRESHOLD = 60;   // deg/s (works well on both platforms)
+const SPIN_DURATION = 400;  // ms
+const STOP_DELAY = 1200;    // ms
+
+function unlockAudio() {
+  music.play().then(() => {
+    music.pause();
+    music.currentTime = 0;
+    console.log("Audio unlocked");
+  }).catch(() => {});
+}
+
+function startAudio() {
+  if (!isPlaying) {
+    music.loop = true;
+    music.play();
+    isPlaying = true;
+    statusEl.textContent = "🎵 Playing";
+  }
+}
+
+function stopAudio() {
+  if (isPlaying) {
+    music.pause();
+    isPlaying = false;
+    statusEl.textContent = "Idle";
+  }
+}
+
+function handleRotation(beta) {
+  const now = Date.now();
+  const speed = Math.abs(beta);
+
+  if (speed > SPIN_THRESHOLD) {
+    if (!spinStartTime) spinStartTime = now;
+    if (now - spinStartTime >= SPIN_DURATION) {
+      startAudio();
     }
+    lastSpinTime = now;
+  } else {
+    spinStartTime = null;
+  }
 
-    function stopAudio() {
-      if (isPlaying) {
-        music.pause();
-        isPlaying = false;
-      }
+  if (isPlaying && now - lastSpinTime > STOP_DELAY) {
+    stopAudio();
+  }
+}
+
+function startMotion() {
+  unlockAudio();
+  statusEl.textContent = "Motion enabled";
+
+  window.addEventListener("devicemotion", e => {
+    if (e.rotationRate && e.rotationRate.beta != null) {
+      handleRotation(e.rotationRate.beta);
     }
+  });
+}
 
-    function handleRotationRate(beta) {
-      const speed = Math.abs(beta); // only X-axis rotation
-      const now = Date.now();
+startBtn.addEventListener("click", () => {
+  if (typeof DeviceMotionEvent !== "undefined" &&
+      typeof DeviceMotionEvent.requestPermission === "function") {
+    // iOS
+    DeviceMotionEvent.requestPermission().then(state => {
+      if (state === "granted") startMotion();
+      else statusEl.textContent = "Permission denied";
+    });
+  } else {
+    // Android & others
+    startMotion();
+  }
 
-      if (speed > SPIN_THRESHOLD) {
-        if (!spinStartTime) {
-          spinStartTime = now;
-        }
-        if (now - spinStartTime > SPIN_DURATION) {
-          startAudio();
-        }
-        lastSpinTime = now;
-      } else {
-        spinStartTime = null;
-      }
+  startBtn.disabled = true;
+  startBtn.textContent = "Motion Enabled";
+});
+</script>
 
-      // stop music if no spin for STOP_DELAY ms
-      if (isPlaying && now - lastSpinTime > STOP_DELAY) {
-        stopAudio();
-      }
-    }
-
-    function requestPermissions() {
-      if (typeof DeviceMotionEvent.requestPermission === 'function') {
-        const btn = document.createElement('button');
-        btn.textContent = "Enable Motion";
-        btn.style.fontSize = "20px";
-        btn.style.padding = "10px 20px";
-        document.body.appendChild(btn);
-
-        btn.addEventListener('click', () => {
-          DeviceMotionEvent.requestPermission().then(state => {
-            if (state === 'granted') {
-              window.addEventListener('devicemotion', (e) => {
-                if (e.rotationRate) {
-                  handleRotationRate(e.rotationRate.beta || 0);
-                }
-              });
-            }
-          });
-          document.body.removeChild(btn);
-        });
-      } else {
-        // Non-iOS browsers
-        window.addEventListener('devicemotion', (e) => {
-          if (e.rotationRate) {
-            handleRotationRate(e.rotationRate.beta || 0);
-          }
-        });
-      }
-    }
-
-    requestPermissions();
-  </script>
 </body>
 </html>
