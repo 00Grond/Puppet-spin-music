@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spin to Play Music (X-Axis) #4</title>
+</head>
+<body>
+  <h1>Spin the Box Forward/Backward to Play Music</h1>
+  <audio id="music" src="puppet.mp3"></audio>
+
+  <script>
+    const music = document.getElementById('music');
+    let isPlaying = false;
+    let spinStartTime = null;
+    let lastSpinTime = Date.now();
+
+    const SPIN_THRESHOLD = 90;      // degrees per second around X-axis
+    const SPIN_DURATION = 500;      // ms of continuous spin needed
+    const STOP_DELAY = 1500;        // ms after no spin before stopping music
+
+    function startAudio() {
+      if (!isPlaying) {
+        music.loop = true;
+        music.play();
+        isPlaying = true;
+      }
+    }
+
+    function stopAudio() {
+      if (isPlaying) {
+        music.pause();
+        isPlaying = false;
+      }
+    }
+
+    function handleRotationRate(beta) {
+      const speed = Math.abs(beta); // only X-axis rotation
+      const now = Date.now();
+
+      if (speed > SPIN_THRESHOLD) {
+        if (!spinStartTime) {
+          spinStartTime = now;
+        }
+        if (now - spinStartTime > SPIN_DURATION) {
+          startAudio();
+        }
+        lastSpinTime = now;
+      } else {
+        spinStartTime = null;
+      }
+
+      // stop music if no spin for STOP_DELAY ms
+      if (isPlaying && now - lastSpinTime > STOP_DELAY) {
+        stopAudio();
+      }
+    }
+
+    function requestPermissions() {
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        const btn = document.createElement('button');
+        btn.textContent = "Enable Motion";
+        btn.style.fontSize = "20px";
+        btn.style.padding = "10px 20px";
+        document.body.appendChild(btn);
+
+        btn.addEventListener('click', () => {
+          DeviceMotionEvent.requestPermission().then(state => {
+            if (state === 'granted') {
+              window.addEventListener('devicemotion', (e) => {
+                if (e.rotationRate) {
+                  handleRotationRate(e.rotationRate.beta || 0);
+                }
+              });
+            }
+          });
+          document.body.removeChild(btn);
+        });
+      } else {
+        // Non-iOS browsers
+        window.addEventListener('devicemotion', (e) => {
+          if (e.rotationRate) {
+            handleRotationRate(e.rotationRate.beta || 0);
+          }
+        });
+      }
+    }
+
+    requestPermissions();
+  </script>
+</body>
+</html>
