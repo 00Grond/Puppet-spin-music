@@ -3,90 +3,127 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spin to Play Music (X-Axis) #4</title>
+  <title>Spin to Play Music – DEBUG (X Axis)</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #111;
+      color: #0f0;
+      padding: 20px;
+    }
+    .box {
+      border: 1px solid #0f0;
+      padding: 10px;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Spin the Box Forward/Backward to Play Music</h1>
-  <audio id="music" src="puppet.mp3"></audio>
 
-  <script>
-    const music = document.getElementById('music');
-    let isPlaying = false;
-    let spinStartTime = null;
-    let lastSpinTime = Date.now();
+<h1>DEBUG: Spin X-Axis</h1>
+<button id="permBtn">Enable Motion</button>
 
-    const SPIN_THRESHOLD = 90;      // degrees per second around X-axis
-    const SPIN_DURATION = 500;      // ms of continuous spin needed
-    const STOP_DELAY = 1500;        // ms after no spin before stopping music
+<audio id="music" src="puppet.mp3"></audio>
 
-    function startAudio() {
-      if (!isPlaying) {
-        music.loop = true;
-        music.play();
-        isPlaying = true;
-      }
+<div class="box">
+  <div>Beta (X °/s): <span id="betaVal">0</span></div>
+  <div>|Beta|: <span id="betaAbs">0</span></div>
+  <div>Status: <span id="status">idle</span></div>
+  <div>Spin timer: <span id="timer">0</span> ms</div>
+  <div>Last motion: <span id="last">–</span></div>
+</div>
+
+<script>
+const music = document.getElementById("music");
+
+const betaVal = document.getElementById("betaVal");
+const betaAbs = document.getElementById("betaAbs");
+const statusEl = document.getElementById("status");
+const timerEl = document.getElementById("timer");
+const lastEl = document.getElementById("last");
+
+let isPlaying = false;
+let spinStartTime = null;
+let lastSpinTime = 0;
+
+const SPIN_THRESHOLD = 90;   // °/s
+const SPIN_DURATION = 500;  // ms
+const STOP_DELAY = 1500;    // ms
+
+function startAudio() {
+  if (!isPlaying) {
+    music.loop = true;
+    music.play().catch(err => {
+      console.error("Audio play error:", err);
+    });
+    isPlaying = true;
+    statusEl.textContent = "PLAYING";
+  }
+}
+
+function stopAudio() {
+  if (isPlaying) {
+    music.pause();
+    isPlaying = false;
+    statusEl.textContent = "idle";
+  }
+}
+
+function handleRotation(beta) {
+  const now = Date.now();
+  const absBeta = Math.abs(beta);
+
+  betaVal.textContent = beta.toFixed(1);
+  betaAbs.textContent = absBeta.toFixed(1);
+  lastEl.textContent = "now";
+
+  if (absBeta > SPIN_THRESHOLD) {
+    if (!spinStartTime) {
+      spinStartTime = now;
     }
+    timerEl.textContent = now - spinStartTime;
 
-    function stopAudio() {
-      if (isPlaying) {
-        music.pause();
-        isPlaying = false;
-      }
+    statusEl.textContent = "spinning";
+
+    if (now - spinStartTime >= SPIN_DURATION) {
+      startAudio();
     }
+    lastSpinTime = now;
+  } else {
+    spinStartTime = null;
+    timerEl.textContent = "0";
+    if (!isPlaying) statusEl.textContent = "idle";
+  }
 
-    function handleRotationRate(beta) {
-      const speed = Math.abs(beta); // only X-axis rotation
-      const now = Date.now();
+  if (isPlaying && now - lastSpinTime > STOP_DELAY) {
+    stopAudio();
+  }
+}
 
-      if (speed > SPIN_THRESHOLD) {
-        if (!spinStartTime) {
-          spinStartTime = now;
-        }
-        if (now - spinStartTime > SPIN_DURATION) {
-          startAudio();
-        }
-        lastSpinTime = now;
-      } else {
-        spinStartTime = null;
-      }
-
-      // stop music if no spin for STOP_DELAY ms
-      if (isPlaying && now - lastSpinTime > STOP_DELAY) {
-        stopAudio();
-      }
-    }
-
-    function requestPermissions() {
-      if (typeof DeviceMotionEvent.requestPermission === 'function') {
-        const btn = document.createElement('button');
-        btn.textContent = "Enable Motion";
-        btn.style.fontSize = "20px";
-        btn.style.padding = "10px 20px";
-        document.body.appendChild(btn);
-
-        btn.addEventListener('click', () => {
-          DeviceMotionEvent.requestPermission().then(state => {
-            if (state === 'granted') {
-              window.addEventListener('devicemotion', (e) => {
-                if (e.rotationRate) {
-                  handleRotationRate(e.rotationRate.beta || 0);
-                }
-              });
-            }
-          });
-          document.body.removeChild(btn);
-        });
-      } else {
-        // Non-iOS browsers
-        window.addEventListener('devicemotion', (e) => {
-          if (e.rotationRate) {
-            handleRotationRate(e.rotationRate.beta || 0);
+document.getElementById("permBtn").addEventListener("click", () => {
+  if (typeof DeviceMotionEvent.requestPermission === "function") {
+    DeviceMotionEvent.requestPermission().then(state => {
+      if (state === "granted") {
+        statusEl.textContent = "permission granted";
+        window.addEventListener("devicemotion", e => {
+          if (e.rotationRate && e.rotationRate.beta != null) {
+            handleRotation(e.rotationRate.beta);
           }
         });
+      } else {
+        statusEl.textContent = "permission denied";
       }
-    }
+    });
+  } else {
+    // non-iOS
+    window.addEventListener("devicemotion", e => {
+      if (e.rotationRate && e.rotationRate.beta != null) {
+        handleRotation(e.rotationRate.beta);
+      }
+    });
+  }
+});
+</script>
 
-    requestPermissions();
-  </script>
 </body>
 </html>
